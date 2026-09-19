@@ -27,7 +27,7 @@ def analyze_and_send():
     )
 
     payload = {
-        "model": "grok-beta",
+        "model": "grok-2-latest",
         "messages": [
             {"role": "system", "content": "Bạn là chuyên gia phân tích tài chính vĩ mô và giao dịch Vàng (XAU/USD), USD."},
             {"role": "user", "content": prompt}
