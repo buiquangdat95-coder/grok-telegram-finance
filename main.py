@@ -1,15 +1,35 @@
 import os
 import requests
+import json
 
-GROK_API_KEY = os.getenv("GROK_API_KEY")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+GROK_API_KEY = os.getenv("GROK_API_KEY", "").strip()
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+
+def extract_text(data):
+    """Trích xuất văn bản thuần túy từ phản hồi của xAI và giải mã Tiếng Việt"""
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict):
+                # Ưu tiên lấy nội dung ở phần output_text
+                if item.get("type") == "output_text" and "text" in item:
+                    return item["text"]
+                # Hoặc kiểm tra các thẻ content
+                if "content" in item:
+                    res = extract_text(item["content"])
+                    if res:
+                        return res
+    elif isinstance(data, dict):
+        if "output_text" in data:
+            return data["output_text"]
+        if "content" in data:
+            return extract_text(data["content"])
+    return None
 
 def analyze_and_send():
     if not GROK_API_KEY or not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         raise ValueError("Thiếu thông tin Secrets! Hãy kiểm tra lại GROK_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID trên GitHub.")
 
-    # Endpoint chuẩn mới nhất từ xAI Console
     grok_url = "https://api.x.ai/v1/responses"
     headers = {
         "Authorization": f"Bearer {GROK_API_KEY}",
@@ -27,7 +47,6 @@ def analyze_and_send():
         "🎯 Góc nhìn hành động: [Tóm tắt kịch bản ngắn gọn 1-2 câu]"
     )
 
-    # Cấu trúc payload chuẩn xAI mới
     payload = {
         "model": "grok-4.6",
         "input": prompt
@@ -38,15 +57,26 @@ def analyze_and_send():
     response.raise_for_status()
     
     res_data = response.json()
-    # Tự động trích xuất nội dung từ phản hồi của xAI
-    if "output" in res_data:
-        analysis_text = res_data["output"]
-    elif "choices" in res_data:
-        analysis_text = res_data["choices"][0]["message"]["content"]
-    else:
-        analysis_text = str(res_data)
+    
+    # Bóc tách nội dung văn bản
+    analysis_text = extract_text(res_data)
+    
+    # Nếu không trích xuất được dạng mảng, lấy thử các trường mặc định
+    if not analysis_text:
+        if "output" in res_data:
+            analysis_text = str(res_data["output"])
+        elif "choices" in res_data:
+            analysis_text = res_data["choices"][0]["message"]["content"]
+        else:
+            analysis_text = response.text
 
-    # Gửi báo cáo về Telegram
+    # Giải mã Unicode tiếng Việt nếu còn vướng mã u00xx
+    try:
+        analysis_text = analysis_text.encode('utf-8').decode('unicode_escape')
+    except Exception:
+        pass
+
+    # Gửi báo cáo sạch đẹp về Telegram
     telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     telegram_payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -55,7 +85,7 @@ def analyze_and_send():
     
     tg_response = requests.post(telegram_url, json=telegram_payload)
     tg_response.raise_for_status()
-    print("Đã gửi báo cáo vĩ mô về Telegram thành công!")
+    print("Đã gửi báo cáo vĩ mô định dạng đẹp về Telegram thành công!")
 
 if __name__ == "__main__":
     analyze_and_send()
