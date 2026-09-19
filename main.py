@@ -7,9 +7,10 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def analyze_and_send():
     if not GROK_API_KEY or not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        raise ValueError("Thiếu mã Secrets! Hãy kiểm tra lại GROK_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID trên GitHub.")
+        raise ValueError("Thiếu thông tin Secrets! Hãy kiểm tra lại GROK_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID trên GitHub.")
 
-    grok_url = "https://api.x.ai/v1/chat/completions"
+    # Endpoint chuẩn mới nhất từ xAI Console
+    grok_url = "https://api.x.ai/v1/responses"
     headers = {
         "Authorization": f"Bearer {GROK_API_KEY}",
         "Content-Type": "application/json"
@@ -26,41 +27,35 @@ def analyze_and_send():
         "🎯 Góc nhìn hành động: [Tóm tắt kịch bản ngắn gọn 1-2 câu]"
     )
 
-    # Thử danh sách các model chính thức từ xAI
-    models_to_try = ["grok-2-latest", "grok-2", "grok-beta"]
-    analysis_text = None
+    # Cấu trúc payload chuẩn xAI mới
+    payload = {
+        "model": "grok-4.6",
+        "input": prompt
+    }
 
-    for model_name in models_to_try:
-        payload = {
-            "model": model_name,
-            "messages": [
-                {"role": "system", "content": "Bạn là chuyên gia phân tích tài chính vĩ mô và giao dịch Vàng (XAU/USD), USD."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.3
-        }
+    # Gọi API xAI
+    response = requests.post(grok_url, headers=headers, json=payload)
+    response.raise_for_status()
+    
+    res_data = response.json()
+    # Tự động trích xuất nội dung từ phản hồi của xAI
+    if "output" in res_data:
+        analysis_text = res_data["output"]
+    elif "choices" in res_data:
+        analysis_text = res_data["choices"][0]["message"]["content"]
+    else:
+        analysis_text = str(res_data)
 
-        res = requests.post(grok_url, headers=headers, json=payload)
-        if res.status_code == 200:
-            analysis_text = res.json()['choices'][0]['message']['content']
-            print(f"Đã gọi thành công bằng model: {model_name}")
-            break
-        else:
-            print(f"Model {model_name} trả về mã lỗi {res.status_code}, đang thử model tiếp theo...")
-
-    if not analysis_text:
-        raise RuntimeError(f"Tất cả model xAI đều không khả dụng. Phản hồi cuối: {res.text}")
-
-    # Gửi tin nhắn Telegram
+    # Gửi báo cáo về Telegram
     telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     telegram_payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": analysis_text
     }
     
-    tg_res = requests.post(telegram_url, json=telegram_payload)
-    tg_res.raise_for_status()
-    print("Đã gửi tin nhắn báo cáo về Telegram thành công!")
+    tg_response = requests.post(telegram_url, json=telegram_payload)
+    tg_response.raise_for_status()
+    print("Đã gửi báo cáo vĩ mô về Telegram thành công!")
 
 if __name__ == "__main__":
     analyze_and_send()
