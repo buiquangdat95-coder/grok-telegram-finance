@@ -1,0 +1,31 @@
+name: Run Grok Financial Analysis
+
+on:
+  schedule:
+    # Lịch chạy theo giờ UTC (Việt Nam = UTC + 7)
+    - cron: '0 0 * * *'    # 07:00 sáng giờ VN
+    - cron: '30 7 * * *'   # 14:30 chiều giờ VN
+    - cron: '0 13 * * *'   # 20:00 tối giờ VN
+  workflow_dispatch: # Cho phép bấm chạy thủ công để test bất kỳ lúc nào
+
+jobs:
+  run-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Execute Script
+        env:
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
