@@ -1,13 +1,14 @@
 import os
 import requests
 
-# Lấy các mã bí mật từ môi trường Secrets
 GROK_API_KEY = os.getenv("GROK_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def analyze_and_send():
-    # 1. Gọi Grok API
+    if not GROK_API_KEY or not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        raise ValueError("Thiếu thông tin Secrets! Hãy kiểm tra lại GROK_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID trong GitHub Secrets.")
+
     grok_url = "https://api.x.ai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {GROK_API_KEY}",
@@ -34,21 +35,21 @@ def analyze_and_send():
         "temperature": 0.3
     }
 
-    try:
-        response = requests.post(grok_url, headers=headers, json=payload)
-        response.raise_for_status()
-        analysis_text = response.json()['choices'][0]['message']['content']
-    except Exception as e:
-        analysis_text = f"⚠️ Có lỗi xảy ra khi gọi Grok API: {str(e)}"
+    # Gọi Grok API
+    response = requests.post(grok_url, headers=headers, json=payload)
+    response.raise_for_status()
+    analysis_text = response.json()['choices'][0]['message']['content']
 
-    # 2. Gửi báo cáo về Telegram
+    # Gửi tin nhắn Telegram
     telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     telegram_payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": analysis_text
     }
     
-    requests.post(telegram_url, json=telegram_payload)
+    tg_response = requests.post(telegram_url, json=telegram_payload)
+    tg_response.raise_for_status()
+    print("Đã gửi tin nhắn Telegram thành công!")
 
 if __name__ == "__main__":
     analyze_and_send()
